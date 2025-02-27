@@ -60,5 +60,5 @@ python3 plot_trajectories.py
 ```
 If everything works, you should see the plot of the computed trajectories in three different scenarios:
 ![Trajectories](media/Trajectories_dynamic_game.png)
-and some information, including the trajectory points for each vehicle, printed in the terminal.
+Some information, including the trajectory points for each vehicle, are printed in the terminal.
 To create a new scenario to test, please refer to the main.cpp file, where the three scenarios above mentioned are created.
