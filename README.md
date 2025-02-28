@@ -6,7 +6,7 @@ Giovanni Lucente, Mikkel Skov Maarssoe, Sanath Himasekhar Konthala, Anas Abulehi
 
 
 This repository contains the implementation of **DeepGame-TP** without the LSTM network presented in the paper. The application simply solves the dynamic game without using deep learning to predict the cost function. 
-For further information and videos of **DeepGame-TP** implemented in [**ADORe**](https://github.com/eclipse-adore/adore), please visit this [page](https://giovannilucente.github.io/portfolio/dynamic_game_trajectory_planner/index.html).
+For further information and videos of **DeepGame-TP** implemented in [**ADORe**](https://github.com/DLR-TS/adore), please visit this [page](https://giovannilucente.github.io/portfolio/dynamic_game_trajectory_planner/index.html).
 
 ## Installation and Setup:
 To install and run this project locally, follow these steps:
