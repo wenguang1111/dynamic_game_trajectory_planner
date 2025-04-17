@@ -118,6 +118,7 @@ public:
                              const tk::spline & spline_y, double s);                 /** computes the curvature on the spline x(t) and y(t) at time t*/
     double gradient_norm(const double* gradient);                                               /** computes the norm of the gradient */
     void correctionU(double* U_);                                                    /** corrects U if outside the boundaries */
+    void integrate_opt(double* X, const double* U); 
 };
 
 #endif // DYNAMIC_GAME_PLANNER_H

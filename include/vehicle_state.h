@@ -16,12 +16,32 @@ struct TrajectoryPoint {
     double t_start; /** starting time of the point*/
     double t_end;   /** ending time of the point*/
 };
+
+struct TrajectoryPointSoA {
+    double* x;       /** x coordinate */
+    double* y;       /** y coordinate */
+    double* psi;     /** heading */
+    double* v;       /** speed */
+    double* omega;   /** yaw rate */
+    double* beta;    /** slip angle */
+    double* k;       /** curvature */
+    double* s;       /** progression */   
+    double* t_start; /** starting time of the point*/
+    double* t_end;   /** ending time of the point*/
+};
+
+// typedef TrajectoryPointSoA Trajectory;
 typedef std::vector<TrajectoryPoint> Trajectory;
 
 struct Input {
     double a;       /** acceleration */
     double delta;   /** steering angle */     
 };
+struct InputSoA {
+    double* a;       /** acceleration */
+    double* delta;   /** steering angle */     
+};
+// typedef InputSoA Control;
 typedef std::vector<Input> Control;
 
 /** Lane structure to store lane properties */
@@ -63,6 +83,78 @@ struct VehicleState {
         : x(x_), y(y_), v(v_), psi(psi_), beta(beta_), a(a_), v_target(v_target_) {}
 };
 
-using TrafficParticipants = std::vector<VehicleState>;  // Alias for a list of vehicles
+// SoA version of VehicleState
+struct VehicleStateSoA {
+    double* x;
+    double* y;
+    double* psi;
+    double* beta;
+    double* v;
+    double* a;
+    double* L;
+    double* W; 
+    double* v_target;
+    Lane* centerlane;
+    Lane* leftlane;
+    Lane* rightlane; 
+    Trajectory* predicted_trajectory;
+    Control* predicted_control;
+
+    int size; // number of vehicles
+
+    // VehicleStateSoA(int n) : size(n) {
+    //     x = new float[n]();
+    //     y = new float[n]();
+    //     v = new float[n]();
+    //     psi = new float[n]();
+    //     s = new float[n]();
+    //     l = new float[n]();
+    //     v_target = new float[n]();
+    //     centerlane = new Spline[n]();
+    // }
+
+    // ~VehicleStateSoA() {
+    //     delete[] x;
+    //     delete[] y;
+    //     delete[] v;
+    //     delete[] psi;
+    //     delete[] s;
+    //     delete[] l;
+    //     delete[] v_target;
+    //     delete[] centerlane;
+    // }
+
+    // // Optional: copy from AoS
+    // void fromAoS(const std::vector<VehicleState>& aos) {
+    //     for (int i = 0; i < size; ++i) {
+    //         x[i] = aos[i].x;
+    //         y[i] = aos[i].y;
+    //         v[i] = aos[i].v;
+    //         psi[i] = aos[i].psi;
+    //         s[i] = aos[i].s;
+    //         l[i] = aos[i].l;
+    //         v_target[i] = aos[i].v_target;
+    //         centerlane[i] = aos[i].centerlane;
+    //     }
+    // }
+
+    // // Optional: copy back to AoS
+    // void toAoS(std::vector<VehicleState>& aos) const {
+    //     for (int i = 0; i < size; ++i) {
+    //         aos[i].x = x[i];
+    //         aos[i].y = y[i];
+    //         aos[i].v = v[i];
+    //         aos[i].psi = psi[i];
+    //         aos[i].s = s[i];
+    //         aos[i].l = l[i];
+    //         aos[i].v_target = v_target[i];
+    //         aos[i].centerlane = centerlane[i];
+    //     }
+    // }
+};
+
+
+// using TrafficParticipants = VehicleStateSoA;  // Alias for a list of vehicles
+using TrafficParticipants = std::vector<VehicleState>; 
 
 #endif  // VEHICLE_STATE_H

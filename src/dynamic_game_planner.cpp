@@ -24,7 +24,8 @@ void DynamicGamePlanner::run(TrafficParticipants& traffic_state) {
 
     initial_guess(X, U);
     trust_region_solver(U);
-    integrate(X, U);
+    // integrate(X, U);
+    integrate_opt(X, U);
     print_trajectories(X, U);
     compute_constraints(constraints, X, U);
     constraints_diagnostic(constraints, false);
@@ -84,7 +85,8 @@ void DynamicGamePlanner::initial_guess(double* X_, double* U_)
             U_[nU * (N + 1) * i + nU * j + F] = 0.3;
         }
     }
-    integrate(X_, U_);
+    // integrate(X_, U_);
+    integrate_opt(X_,U_);
 }
 
 /** integrates the input U to get the state X */
@@ -162,8 +164,9 @@ void DynamicGamePlanner::integrate(double* X_, const double* U_)
             X_[td + l] = s_t0[l];
 
             t+= dt;
+             
         }
-    }
+    } 
 }
 
 /** SR1 Hessian matrix update*/
@@ -397,12 +400,14 @@ void DynamicGamePlanner::compute_gradient(double* gradient, const double* U_)
         for (int i = 0; i < nU_; i++){
             dU[i] = U_[i];
         }
-        integrate(X_, U_);
+        // integrate(X_, U_);
+        integrate_opt(X_,U_);
         compute_lagrangian(lagrangian, X_, U_);
         for (int i = start; i < end; i++) {
             index = i / nu;
             dU[i] = U_[i] + eps;
-            integrate(dX, dU);
+            // integrate(dX, dU);
+            integrate_opt(dX,dU);
             compute_constraints_vehicle_i(constraints_i, dX, dU, index);
             cost_i = compute_cost_vehicle_i( dX, dU, index);
             lagrangian_i = compute_lagrangian_vehicle_i( cost_i, constraints_i, index);
@@ -668,7 +673,8 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
     std::vector<Eigen::MatrixXd> y_(M);
 
     // Variables initialization:
-    integrate(dX, U_);
+    // integrate(dX, U_);
+    integrate_opt(dX, U_);
     for (int i = 0; i < nU_; i++){
         dU[i] = U_[i];
         dU_[i] = U_[i];
@@ -696,7 +702,8 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
     while (convergence == false && iter < iter_lim ){
 
         // Compute the grandient and the lagrangian
-        integrate(dX_, dU_);
+        // integrate(dX_, dU_);
+        integrate_opt(dX_, dU_);
         compute_gradient(gradient, dU_);
         compute_lagrangian(lagrangian, dX_, dU_);
 
@@ -714,7 +721,8 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
         }
 
         // Compute the new grandient and the new lagrangian with the possible step dU:
-        integrate(dX, dU);
+        // integrate(dX, dU);
+        integrate_opt(dX, dU);
         compute_gradient(d_gradient, dU);
         compute_lagrangian(d_lagrangian, dX, dU);
 
@@ -764,7 +772,8 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
         }
 
         // Compute the new state: 
-        integrate(dX_, dU_);
+        // integrate(dX_, dU_);
+        integrate_opt(dX_, dU_);
 
         // Compute the constraints with the new solution:
         compute_constraints(constraints, dX_, dU_);
@@ -804,5 +813,104 @@ void DynamicGamePlanner::correctionU(double* U_)
                 U_[nU * (N + 1) * i + nU * j + d] = d_low;
             }
         }
+    }
+}
+
+
+/** integrates the input U to get the state X */
+void DynamicGamePlanner::integrate_opt(double* X_, const double* U_)
+{
+    int tu;
+    int td;
+    int ind;
+    double s_ref;
+    double v_ref;
+    double t;
+    double s_t0[nX];
+    double sr_t0[nX];
+    double u_t0[nU];
+    double ds_t0[nX];
+    double ds_t0_v[N+1];
+    double s_t0_v[N+1];
+
+    for (int i = 0; i < M; i++){
+        ind = 0;
+        td = nx * i;
+        t = 0.0;
+
+        // Initial state:
+        s_t0[x] = traffic[i].x;
+        s_t0[y] = traffic[i].y;
+        s_t0[v] = traffic[i].v;
+        s_t0[psi] = traffic[i].psi;
+        s_t0[s] = 0.0;
+        s_t0[l] = 0.0;
+
+        for (int j = 0; j < N + 1; j++){
+            tu = nU * (N + 1) * i + nU * j;
+            // Input control:
+            u_t0[F] = U_[tu + F];
+            // Derivatives: 
+            ds_t0[v] = (-1/tau) * s_t0[v] + (k) * u_t0[F];
+            ds_t0_v[j] = ds_t0[v];
+            // Integration to compute the new state: 
+            s_t0[v] += dt * ds_t0[v];
+
+            if (s_t0[v] < 0.0){s_t0[v] = 0.0;}
+            s_t0_v[j] = s_t0[v];
+            t+= dt;
+        }
+
+        s_t0[v] = traffic[i].v;
+        
+        for (int j = 0; j < N + 1; j++){
+            tu = nU * (N + 1) * i + nU * j;
+            td = nX * (N + 1) * i + nX * j;
+            // Reference point on the center lane:
+            s_ref = s_t0[s];
+            sr_t0[x] = traffic[i].centerlane.spline_x(s_ref);
+            sr_t0[y] =traffic[i].centerlane.spline_y(s_ref);
+            sr_t0[psi] = traffic[i].centerlane.compute_heading(s_ref);
+            
+            // Target speed:
+            v_ref = traffic[i].v_target;
+
+            // Input control:
+            u_t0[d] = U_[tu + d];
+            u_t0[F] = U_[tu + F];
+
+            // Derivatives: 
+            ds_t0[x] = s_t0[v] * cos(s_t0[psi] + cg_ratio * u_t0[d]);
+            ds_t0[y] = s_t0[v] * sin(s_t0[psi] + cg_ratio * u_t0[d]);
+            // ds_t0[v] = (-1/tau) * s_t0[v] + (k) * u_t0[F];
+            ds_t0[v] = ds_t0_v[j];
+            ds_t0[psi] = s_t0[v] * tan(u_t0[d]) * cos(cg_ratio * u_t0[d])/ length;
+            ds_t0[l] = weight_target_speed * (s_t0[v] - v_ref) * (s_t0[v] - v_ref)
+                    + weight_center_lane * ((sr_t0[x] - s_t0[x]) * (sr_t0[x] - s_t0[x]) + (sr_t0[y] - s_t0[y]) * (sr_t0[y] - s_t0[y]))
+                    + weight_heading * ((std::cos(sr_t0[psi]) - std::cos(s_t0[psi]))*(std::cos(sr_t0[psi]) - std::cos(s_t0[psi]))
+                    +        (std::sin(sr_t0[psi]) - std::sin(s_t0[psi]))*(std::sin(sr_t0[psi]) - std::sin(s_t0[psi])))
+                    + weight_input * u_t0[F] * u_t0[F];
+            ds_t0[s] = s_t0[v];
+
+            // Integration to compute the new state: 
+            s_t0[x] += dt * ds_t0[x];
+            s_t0[y] += dt * ds_t0[y];
+            // s_t0[v] += dt * ds_t0[v];
+            s_t0[v] = s_t0_v[j];
+            s_t0[psi] += dt * ds_t0[psi];
+            s_t0[s] += dt * ds_t0[s];
+            s_t0[l] += dt * ds_t0[l];
+
+            // Save the state in the trajectory
+            X_[td + x] = s_t0[x];
+            X_[td + y] = s_t0[y];
+            X_[td + v] = s_t0[v];
+            X_[td + psi] = s_t0[psi];
+            X_[td + s] = s_t0[s];
+            X_[td + l] = s_t0[l];
+
+            t+= dt;
+        }
+
     }
 }
