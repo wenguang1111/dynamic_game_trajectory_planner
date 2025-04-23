@@ -8,29 +8,12 @@
 #include <mutex>
 #include "vehicle_state.h"
 #include "utils.h"  // Utility functions
+#include "parameters.h"  // Parameters for the planner
 
 class DynamicGamePlanner {
-
-private:
-    const double tau = 2.0;
-    const double k = 10.0;
-    const double r_safe = 2.5;
-    const double r_lane = 3.5;
-    const double eps = 1e-6;
-    const double length = 5.0;
-    const double cg_ratio = 0.5;
-    const double pi = 3.1415;
-    const double v_max = 10.0;
-
-    constexpr static const int N = 20;                                  /** number of integration nodes */
-    constexpr static const int nX = 6;                                  /** <X, Y, V, PSI, S, L> */
-    constexpr static const int nU = 2;                                  /** <d, F> */
-    constexpr static const int N_interpolation = 60;
-    constexpr static const double dt_interpolation = 0.1;
-
 public:
-    static const int nx = nX * (N + 1);                                 /** size of the state trajectory X_i for each vehicle */
-    static const int nu = nU * (N + 1);                                 /** size of the input trajectory U_i for each vehicle */
+    static constexpr int nx = Parameters::nX * (Parameters::N + 1);                          /** size of the state trajectory X_i for each vehicle */
+    static const int nu = Parameters::nU * (Parameters::N + 1);                                 /** size of the input trajectory U_i for each vehicle */
     int M;                                                              /** number of agents */ 
     int nC;                                                             /** total number of inequality constraints */
     int nC_i;                                                           /** inequality constraints for one vehicle */
@@ -38,29 +21,18 @@ public:
     int nX_;                                                            /** number of elements in the state vector X */
     int nU_;                                                            /** number of elements in the input vector U */
     int M_old;                                                          /** number of traffic participants in the previous iteration*/
-    double dt = 0.3;                                                    /** integration time step */
-    double d_up = 0.7;                                                  /** upper bound yaw rate */
-    double d_low = -0.7;                                                /** lower bound yaw rate */
-    double F_up = 2.0;                                                  /** upper bound force */
-    double F_low = -3.0;                                                /** lower bound force */
-
+    
     // Parameters:
+    double rho = 1e-3;                                                  /** penalty weight */ 
     double qf = 1e-2;                                                   /** penalty for the final error in the lagrangian */
     double gamma = 1.3;                                                 /** increasing factor of the penalty weight */
-    double rho = 1e-3;                                                  /** penalty weight */ 
-    double weight_target_speed = 1e0;                                      /** weight for the maximum speed in the lagrangian */
-    double weight_center_lane = 1e-1;                                   /** weight for the center lane in the lagrangian */
-    double weight_heading = 1e2;                                        /** weight for the heading in the lagrangian */
-    double weight_input = 0.0;                                          /** weight for the input in the lagrangian */
-    
+
     std::vector<double> U_old;                                          /** solution in the previous iteration*/
     Eigen::MatrixXd ul;                                                 /** controls lower bound*/
     Eigen::MatrixXd uu;                                                 /** controls upper bound*/
     Eigen::MatrixXd time;                                               /** time vector */
     Eigen::MatrixXd lagrangian_multipliers;                             /** lagrangian multipliers*/
-    
-    enum STATES {x, y, v, psi, s, l};
-    enum INPUTS {d, F};
+    Parameters param;
 
     TrafficParticipants traffic;
 
