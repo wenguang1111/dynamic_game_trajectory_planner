@@ -9,7 +9,9 @@
 #include "vehicle_state.h"
 #include "utils.h"  // Utility functions
 #include "parameters.h"  // Parameters for the planner
+#include "integrate_ispc.h"
 
+using namespace ispc;
 class DynamicGamePlanner {
 public:
     static constexpr int nx = Parameters::nX * (Parameters::N + 1);                          /** size of the state trajectory X_i for each vehicle */
@@ -35,6 +37,8 @@ public:
     Parameters param;
 
     TrafficParticipants traffic;
+    Lanes_ISPC* lanes_ispc;
+    State_ISPC* state_ispc;
 
     DynamicGamePlanner();  // Constructor
     ~DynamicGamePlanner(); // Destructor
@@ -91,6 +95,20 @@ public:
     double gradient_norm(const double* gradient);                                               /** computes the norm of the gradient */
     void correctionU(double* U_);                                                    /** corrects U if outside the boundaries */
     void integrate_opt(double* X, const double* U); 
+    void copyDataForISPC(const TrafficParticipants& traffic);
+    void launch_integrate_ISPC(double* X_, const double* U_);
+    void integrate_SIMD(double* X_, const double* U_);
+    void update_trajectory_local(int i,
+        double v_target_speed,
+        const double* U_,
+        double* sr_t0_x,
+        double* sr_t0_y,
+        double* sr_t0_psi,
+        double* ds_t0_v,
+        double* s_t0_s,
+        double* s_t0_v,
+        double* X_,
+        double* init_s_t0); 
 };
 
 #endif // DYNAMIC_GAME_PLANNER_H

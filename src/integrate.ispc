@@ -10,6 +10,7 @@ struct Spline_ISPC
     const double* m_c;
     const double* m_d;
     const double* m_c0;
+    const size_t _size;
 };
 
 struct Lanes_ISPC{
@@ -59,15 +60,15 @@ size_t find_closest(double target_x, uniform Spline_ISPC* varying spline, size_t
 
 double calculate_position(double s_ref, uniform Spline_ISPC* spline)
 {
-    size_t n=sizeof(spline->m_x)/sizeof(spline->m_x[0]);
+    size_t n=spline->_size;
     size_t idx=find_closest(s_ref,spline, n);
 
-    double h=x-spline->m_x[idx];
+    double h=s_ref-spline->m_x[idx];
     double interpol;
-    if(x<spline->m_x[0]) {
+    if(s_ref<spline->m_x[0]) {
         // extrapolation to the left
         interpol=(*(spline->m_c0)*h + spline->m_b[0])*h + spline->m_y[0];
-    } else if(x>spline->m_x[n-1]) {
+    } else if(s_ref>spline->m_x[n-1]) {
         // extrapolation to the right
         interpol=(spline->m_c[n-1]*h + spline->m_b[n-1])*h + spline->m_y[n-1];
     } else {
@@ -80,7 +81,7 @@ double calculate_position(double s_ref, uniform Spline_ISPC* spline)
 double deriv(int order, double x_position, uniform Spline_ISPC* spline)
 {
     //assert(order>0);
-    size_t n = sizeof(spline->m_x)/sizeof(spline->m_x[0]);
+    size_t n = spline->_size;
     size_t idx = find_closest(x_position, spline, n);
 
     double h=x_position-spline->m_x[idx];
@@ -142,8 +143,8 @@ double compute_heading(double s_ref, Lanes_ISPC lanes)
 }
 
 /** integrates the input U to get the state X */
-export void integrate_ispc(uniform double X_[], uniform const double U_[], uniform Lanes_ISPC lanes[], uniform State_ISPC states[],
-                            uniform int traffic_num)
+export void integrate_ispc(uniform double X_[], uniform const double U_[], uniform const Lanes_ISPC lanes[], uniform const State_ISPC states[],
+                            uniform const int traffic_num)
 {
     int tu;
     int td;
@@ -153,8 +154,9 @@ export void integrate_ispc(uniform double X_[], uniform const double U_[], unifo
     double sr_t0[nX];
     double u_t0[nU];
     double ds_t0[nX];
-
+    int nx = nX * (N + 1); 
     foreach (i = 0 ... traffic_num){
+        td = nx * i;
         // Initial state:
         State_ISPC state_i = states[i];
         Lanes_ISPC lane_i = lanes[i];

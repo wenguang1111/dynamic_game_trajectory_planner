@@ -13,6 +13,7 @@ set(ISPC_TARGET "avx2-i32x8")
 set(ISPC_PATH "${CMAKE_SOURCE_DIR}/src/integrate.ispc")
 set(ISPC_OUT_O "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.o")
 set(ISPC_OUT_H "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.h")
+set(ISPC_OUT_S "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.s")
 
 add_custom_command(
     OUTPUT ${ISPC_OUT_O} ${ISPC_OUT_H}
@@ -20,8 +21,19 @@ add_custom_command(
     DEPENDS ${ISPC_PATH}
     COMMENT "Compiling ISPC: ${ISPC_PATH}"
 )
+# add_custom_command(
+#     OUTPUT ${ISPC_OUT_O} ${ISPC_OUT_H} ${ISPC_OUT_S}
+#     COMMAND ispc ${ISPC_PATH}
+#             -o ${ISPC_OUT_O}
+#             -S -g
+#             --target=${ISPC_TARGET}
+#             --header-outfile=${ISPC_OUT_H}
+#             -o ${ISPC_OUT_S}
+#     DEPENDS ${ISPC_PATH}
+#     COMMENT "Compiling ISPC (with assembly): ${ISPC_PATH}"
+# )
 
-include_directories(include Recorder4Cpp)
+include_directories(include Recorder4Cpp ISPC_OUT_H)
 
 option(USE_RECORDER "Use recorder" OFF)
 set(recorder_file ${recorder_file})
@@ -44,7 +56,7 @@ set(source_files
 )
 
 # add_executable(dynamic_game_trajectory_planner ${source_files} ${recorder_file})
-add_executable(dynamic_game_trajectory_planner ${source_files} ${ISPC_PATH})
+add_executable(dynamic_game_trajectory_planner ${source_files} ${ISPC_PATH} ${recorder_file})
 
 set_target_properties(dynamic_game_trajectory_planner PROPERTIES
     ISPC_INSTRUCTION_SETS ${ISPC_TARGET}
@@ -67,3 +79,6 @@ target_include_directories(dynamic_game_trajectory_planner PRIVATE ${CMAKE_CURRE
 # add_custom_target(generate_asm_dynamic_game_planner
 #     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dynamic_game_planner.s
 # )
+
+
+

@@ -1,5 +1,7 @@
 #include "dynamic_game_planner.h"
-#include "update_trajetcory_interface.h"
+#include "recorder.h"
+// #include "update_trajetcory_interface.h"
+#include "integrate_ispc.h"
 #include <iostream>
 
 DynamicGamePlanner::DynamicGamePlanner() 
@@ -14,23 +16,31 @@ DynamicGamePlanner::~DynamicGamePlanner() {
 void DynamicGamePlanner::run(TrafficParticipants& traffic_state) {
     
     traffic = traffic_state;
-
+    //TODO: copy data to ISPC
+    // copyDataForISPC(traffic, lanes_ispc, state_ispc);
     // Variables initialization and setup:
     setup();
-
+    copyDataForISPC(traffic);
     // definition of the control variable vector U and of the state vector X:
     double U[nU_];
     double X[nX_];
     double constraints[nC];
 
     initial_guess(X, U);
-    trust_region_solver(U);
-    // integrate(X, U);
-    integrate_opt(X, U);
-    print_trajectories(X, U);
-    compute_constraints(constraints, X, U);
-    constraints_diagnostic(constraints, false);
-    traffic = set_prediction(X, U);
+    // trust_region_solver(U);
+    // // // integrate(X, U);
+    // // // integrate_opt(X, U);
+    // // // integrate_SIMD(X,U);
+    // launch_integrate_ISPC(X, U);
+    // print_trajectories(X, U);
+    // compute_constraints(constraints, X, U);
+    // constraints_diagnostic(constraints, false);
+    // traffic = set_prediction(X, U);
+    Recorder::getInstance()->writeDataToCSV();
+    delete lanes_ispc->spline_x;
+    delete lanes_ispc->spline_y;
+    delete state_ispc;
+    delete lanes_ispc;
 }
 
 void DynamicGamePlanner::setup() {
@@ -87,7 +97,25 @@ void DynamicGamePlanner::initial_guess(double* X_, double* U_)
         }
     }
     // integrate(X_, U_);
-    integrate_opt(X_,U_);
+    // integrate_opt(X_,U_);
+    // integrate_SIMD(X_,U_);
+    launch_integrate_ISPC(X_, U_);
+    #ifdef USE_RECORDER
+        for (int i = 0; i < M; i++) {
+            for (int j = 0; j < param.N + 1; j++) {
+            Recorder::getInstance()->saveData<double>("i", i);
+            Recorder::getInstance()->saveData<double>("j", j);    
+            Recorder::getInstance()->saveData<double>("X_x", X_[param.nX * (param.N + 1) * i + param.nX * j + x]);
+            Recorder::getInstance()->saveData<double>("X_y", X_[param.nX * (param.N + 1) * i + param.nX * j + y]);
+            Recorder::getInstance()->saveData<double>("X_v", X_[param.nX * (param.N + 1) * i + param.nX * j + v]);
+            Recorder::getInstance()->saveData<double>("X_psi", X_[param.nX * (param.N + 1) * i + param.nX * j + psi]);
+            Recorder::getInstance()->saveData<double>("X_s", X_[param.nX * (param.N + 1) * i + param.nX * j + s]);
+            Recorder::getInstance()->saveData<double>("X_l", X_[param.nX * (param.N + 1) * i + param.nX * j + l]);
+            Recorder::getInstance()->saveData<double>("U_F", U_[param.nU * (param.N + 1) * i + param.nU * j + F]);
+            Recorder::getInstance()->saveData<double>("U_d", U_[param.nU * (param.N + 1) * i + param.nU * j + d]);
+            }
+        }
+	#endif
 }
 
 /** integrates the input U to get the state X */
@@ -164,8 +192,7 @@ void DynamicGamePlanner::integrate(double* X_, const double* U_)
             X_[td + s] = s_t0[s];
             X_[td + l] = s_t0[l];
 
-            t+= param.dt;
-             
+            t+= param.dt;    
         }
     } 
 }
@@ -383,7 +410,8 @@ double DynamicGamePlanner::compute_lagrangian_vehicle_i(double cost_i, const dou
 /** computation of the gradient of lagrangian_i with respect to U_i for each i with parallelization on cpu*/
 void DynamicGamePlanner::compute_gradient(double* gradient, const double* U_)
 {
-    const int num_threads = std::thread::hardware_concurrency();
+    // const int num_threads = std::thread::hardware_concurrency();
+    const int num_threads = 1;
     std::mutex mutex;
     std::vector<std::thread> threads(num_threads);
 
@@ -402,13 +430,17 @@ void DynamicGamePlanner::compute_gradient(double* gradient, const double* U_)
             dU[i] = U_[i];
         }
         // integrate(X_, U_);
-        integrate_opt(X_,U_);
+        // integrate_opt(X_,U_);
+        // integrate_SIMD(X_,U_);
+        launch_integrate_ISPC(X_, U_);
         compute_lagrangian(lagrangian, X_, U_);
         for (int i = start; i < end; i++) {
             index = i / nu;
             dU[i] = U_[i] + param.eps;
             // integrate(dX, dU);
-            integrate_opt(dX,dU);
+            // integrate_opt(dX,dU);
+            // integrate_SIMD(dX,dU);
+            launch_integrate_ISPC(dX, dU);
             compute_constraints_vehicle_i(constraints_i, dX, dU, index);
             cost_i = compute_cost_vehicle_i( dX, dU, index);
             lagrangian_i = compute_lagrangian_vehicle_i( cost_i, constraints_i, index);
@@ -675,7 +707,9 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
 
     // Variables initialization:
     // integrate(dX, U_);
-    integrate_opt(dX, U_);
+    // integrate_opt(dX, U_);
+    // integrate_SIMD(dX, U_);
+    launch_integrate_ISPC(dX, U_);
     for (int i = 0; i < nU_; i++){
         dU[i] = U_[i];
         dU_[i] = U_[i];
@@ -704,7 +738,9 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
 
         // Compute the grandient and the lagrangian
         // integrate(dX_, dU_);
-        integrate_opt(dX_, dU_);
+        // integrate_opt(dX_, dU_);
+        // integrate_SIMD(dX_, dU_);
+        launch_integrate_ISPC(dX_, dU_);
         compute_gradient(gradient, dU_);
         compute_lagrangian(lagrangian, dX_, dU_);
 
@@ -723,7 +759,9 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
 
         // Compute the new grandient and the new lagrangian with the possible step dU:
         // integrate(dX, dU);
-        integrate_opt(dX, dU);
+        // integrate_opt(dX, dU);
+        // integrate_SIMD(dX, dU);
+        launch_integrate_ISPC(dX, dU);
         compute_gradient(d_gradient, dU);
         compute_lagrangian(d_lagrangian, dX, dU);
 
@@ -774,7 +812,9 @@ void DynamicGamePlanner::trust_region_solver(double* U_)
 
         // Compute the new state: 
         // integrate(dX_, dU_);
-        integrate_opt(dX_, dU_);
+        // integrate_opt(dX_, dU_);
+        // integrate_SIMD(dX_, dU_);
+        launch_integrate_ISPC(dX_, dU_);
 
         // Compute the constraints with the new solution:
         compute_constraints(constraints, dX_, dU_);
@@ -818,121 +858,244 @@ void DynamicGamePlanner::correctionU(double* U_)
 }
 
 
-/** integrates the input U to get the state X */
-void DynamicGamePlanner::integrate_opt(double* X_, const double* U_)
+void DynamicGamePlanner::update_trajectory_local(int i,
+                               double v_target_speed,
+                               const double* U_,
+                               double* sr_t0_x,
+                               double* sr_t0_y,
+                               double* sr_t0_psi,
+                               double* ds_t0_v,
+                               double* s_t0_s,
+                               double* s_t0_v,
+                               double* X_,
+                               double* init_s_t0) 
 {
-    int tu;
-    int td;
-    int ind;
-    double s_ref;
-    double v_ref;
-    double t;
-    double s_t0[param.nX];
-    double sr_t0[param.nX];
     double u_t0[param.nU];
     double ds_t0[param.nX];
-    double ds_t0_v[param.N+1];
-    double s_t0_v[param.N+1];
-    double sr_t0_x[param.N+1];
-    double sr_t0_y[param.N+1];
-    double sr_t0_psi[param.N+1];
-    double s_t0_s[param.N+1];
+    // double sr_t0[param.nX];
+    double s_t0[param.nX];
+    // double v_ref; 
+    int tu;
+    int td;
+    s_t0[x] = init_s_t0[x];
+    s_t0[y] = init_s_t0[y];
+    s_t0[v] = init_s_t0[v];
+    s_t0[psi] = init_s_t0[psi];
+    s_t0[s] = init_s_t0[s];
+    s_t0[l] = init_s_t0[l];
+    
+    for (int j = 0; j < param.N + 1; j++){
+        tu = param.nU * (param.N+1) * i + param.nU * j;
+        td = param.nX * (param.N+1) * i + param.nX * j;
 
-    for (int i = 0; i < M; i++){
-        ind = 0;
-        td = nx * i;
-        t = 0.0;
+        // Reference point
+        // sr_t0[x] = sr_t0_x[j];
+        // sr_t0[y] = sr_t0_y[j];
+        // sr_t0[psi] = sr_t0_psi[j];
 
-        // Initial state:
-        s_t0[x] = traffic[i].x;
-        s_t0[y] = traffic[i].y;
-        s_t0[v] = traffic[i].v;
-        s_t0[psi] = traffic[i].psi;
-        s_t0[s] = 0.0;
-        s_t0[l] = 0.0;
-        s_t0_s[0] = 0.0;
-        for (int j = 0; j < param.N + 1; j++){
-            sr_t0_x[j] = traffic[i].centerlane.spline_x(s_t0[s]);
-            sr_t0_y[j] = traffic[i].centerlane.spline_y(s_t0[s]);
-            sr_t0_psi[j] = traffic[i].centerlane.compute_heading(s_t0[s]);
+        // Target speed
+        // v_ref = v_target_speed;
 
-            tu = param.nU * (param.N + 1) * i + param.nU * j;
-            // Input control:
-            u_t0[F] = U_[tu + F];
-            // Derivatives: 
-            ds_t0[v] = (-1/param.tau) * s_t0[v] + (param.k) * u_t0[F];
-            ds_t0_v[j] = ds_t0[v];
-            ds_t0[s] = s_t0[v];
+        // Input control
+        u_t0[d] = U_[tu + d];
+        u_t0[F] = U_[tu + F];
 
-            // Integration to compute the new state: 
-            s_t0[v] += param.dt * ds_t0[v];
+        // Derivatives
+        ds_t0[x] = s_t0[v] * cos(s_t0[psi] + param.cg_ratio * u_t0[d]);
+        ds_t0[y] = s_t0[v] * sin(s_t0[psi] + param.cg_ratio * u_t0[d]);
+        ds_t0[v] = ds_t0_v[j];
+        ds_t0[psi] = s_t0[v] * tan(u_t0[d]) * cos(param.cg_ratio * u_t0[d]) / param.length;
+        ds_t0[l] = param.weight_target_speed * (s_t0[v] - v_target_speed) * (s_t0[v] - v_target_speed)
+                 + param.weight_center_lane * ((sr_t0_x[j] - s_t0[x]) * (sr_t0_x[j] - s_t0[x]) 
+                 + (sr_t0_y[j] - s_t0[y]) * (sr_t0_y[j] - s_t0[y]))
+                 + param.weight_heading * ((cos(sr_t0_psi[j]) - cos(s_t0[psi])) * (cos(sr_t0_psi[j]) - cos(s_t0[psi]))
+                 + (sin(sr_t0_psi[j]) - sin(s_t0[psi])) * (sin(sr_t0_psi[j]) - sin(s_t0[psi])))
+                 + param.weight_input * u_t0[F] * u_t0[F];
 
-            if (s_t0[v] < 0.0){s_t0[v] = 0.0;}
-            s_t0[s] += param.dt * ds_t0[s];
+        // Integration
+        s_t0[x] += param.dt * ds_t0[x];
+        s_t0[y] += param.dt * ds_t0[y];
+        s_t0[v] = s_t0_v[j];
+        s_t0[psi] += param.dt * ds_t0[psi];
+        s_t0[s] = s_t0_s[j];
+        s_t0[l] += param.dt * ds_t0[l];
 
-            s_t0_v[j] = s_t0[v];
-            s_t0_s[j] = s_t0[s];
+        // Save the state
+        X_[td + x] = s_t0[x];
+        X_[td + y] = s_t0[y];
+        X_[td + v] = s_t0[v];
+        X_[td + psi] = s_t0[psi];
+        X_[td + s] = s_t0[s];
+        X_[td + l] = s_t0[l];
 
-            t+= param.dt;
-        }
-
-        s_t0[v] = traffic[i].v;
-
-        update_trajectory_SIMD(i, traffic[i].v_target, U_, sr_t0_x,
-                                sr_t0_y, sr_t0_psi, ds_t0_v, s_t0_s, X_, s_t0);
-        
-        // for (int j = 0; j < param.N + 1; j++){
-        //     tu = param.nU * (param.N + 1) * i + param.nU * j;
-        //     td = param.nX * (param.N + 1) * i + param.nX * j;
-        //     // // Reference point on the center lane:
-        //     // s_ref = s_t0[s];
-        //     // sr_t0[x] = traffic[i].centerlane.spline_x(s_ref);
-        //     // sr_t0[y] =traffic[i].centerlane.spline_y(s_ref);
-        //     // sr_t0[psi] = traffic[i].centerlane.compute_heading(s_ref);
-        //     sr_t0[x] = sr_t0_x[j];
-        //     sr_t0[y] =sr_t0_y[j];
-        //     sr_t0[psi] = sr_t0_psi[j];
-            
-        //     // Target speed:
-        //     v_ref = traffic[i].v_target;
-
-        //     // Input control:
-        //     u_t0[d] = U_[tu + d];
-        //     u_t0[F] = U_[tu + F];
-
-        //     // Derivatives: 
-        //     ds_t0[x] = s_t0[v] * cos(s_t0[psi] + param.cg_ratio * u_t0[d]);
-        //     ds_t0[y] = s_t0[v] * sin(s_t0[psi] + param.cg_ratio * u_t0[d]);
-        //     // ds_t0[v] = (-1/tau) * s_t0[v] + (k) * u_t0[F];
-        //     ds_t0[v] = ds_t0_v[j];
-        //     ds_t0[psi] = s_t0[v] * tan(u_t0[d]) * cos(param.cg_ratio * u_t0[d])/ param.length;
-        //     ds_t0[l] = param.weight_target_speed * (s_t0[v] - v_ref) * (s_t0[v] - v_ref)
-        //             + param.weight_center_lane * ((sr_t0[x] - s_t0[x]) * (sr_t0[x] - s_t0[x]) + (sr_t0[y] - s_t0[y]) * (sr_t0[y] - s_t0[y]))
-        //             + param.weight_heading * ((std::cos(sr_t0[psi]) - std::cos(s_t0[psi]))*(std::cos(sr_t0[psi]) - std::cos(s_t0[psi]))
-        //             +        (std::sin(sr_t0[psi]) - std::sin(s_t0[psi]))*(std::sin(sr_t0[psi]) - std::sin(s_t0[psi])))
-        //             + param.weight_input * u_t0[F] * u_t0[F];
-        //     // ds_t0[s] = s_t0[v];
-
-        //     // Integration to compute the new state: 
-        //     s_t0[x] += param.dt * ds_t0[x];
-        //     s_t0[y] += param.dt * ds_t0[y];
-        //     // s_t0[v] += dt * ds_t0[v];
-        //     s_t0[v] = s_t0_v[j];
-        //     s_t0[psi] += param.dt * ds_t0[psi];
-        //     // s_t0[s] += param.dt * ds_t0[s];
-        //     s_t0[s] = s_t0_s[j];
-        //     s_t0[l] += param.dt * ds_t0[l];
-
-        //     // Save the state in the trajectory
-        //     X_[td + x] = s_t0[x];
-        //     X_[td + y] = s_t0[y];
-        //     X_[td + v] = s_t0[v];
-        //     X_[td + psi] = s_t0[psi];
-        //     X_[td + s] = s_t0[s];
-        //     X_[td + l] = s_t0[l];
-
-        //     t+= param.dt;
-        // }
-
+        //t+= dt;
     }
+}
+
+/** integrates the input U to get the state X */
+// void DynamicGamePlanner::integrate_SIMD(double* X_, const double* U_)
+// {
+//     int tu;
+//     int td;
+//     int ind;
+//     double s_ref;
+//     double v_ref;
+//     double t;
+
+//     std::vector<double> s_t0_s((param.N+1)*M);
+//     std::vector<double> s_t0_x((param.N+1)*M);
+//     std::vector<double> s_t0_y((param.N+1)*M);
+//     std::vector<double> s_t0_psi((param.N+1)*M);
+//     std::vector<double> s_t0_v((param.N+1)*M);
+
+//     VehicleState_SIMD s_t0;
+//     VehicleState_SIMD ds_t0;
+//     PhysicState_SIMD u_t0;
+//     ReferenceLaneState_SIMD sr_t0;
+//     s_t0.allocate(M);
+//     ds_t0.allocate(M);
+//     u_t0.allocate(M);
+//     sr_t0.allocate(M);
+
+//     for (int i = 0; i < M; i++){
+//         ind = 0;
+//         td = nx * i;
+//         // t = 0.0;
+
+//         // Initial state:
+//         s_t0.x[i] = traffic[i].x;
+//         s_t0.y[i] = traffic[i].y;
+//         s_t0.v[i] = traffic[i].v;
+//         s_t0.psi[i] = traffic[i].psi;
+//         s_t0.s[i] = 0.0;
+
+//         for (int j = 0; j < param.N + 1; j++){
+//             tu = param.nU * (param.N + 1) * i + param.nU * j; //TODO: wird automatisch von ISPC zu array umgewandelt?
+//             td = param.nX * (param.N + 1) * i + param.nX * j; //TODO: wird automatisch von ISPC zu array umgewandelt?
+            
+//             s_t0_s[i*(param.N+1) + j] = s_t0.s[i];
+//             s_t0_x[i*(param.N+1) + j] = s_t0.x[i];
+//             s_t0_y[i*(param.N+1) + j] = s_t0.y[i];
+//             s_t0_psi[i*(param.N+1) + j] = s_t0.psi[i];
+//             s_t0_v[i*(param.N+1) + j] = s_t0.v[i];
+//             // Input control:
+//             u_t0.d[i] = U_[tu + d];
+//             u_t0.F[i] = U_[tu + F];
+            
+//             // Derivatives: 
+//             ds_t0.x[i] = s_t0.v[i] * cos(s_t0.psi[i] + param.cg_ratio * u_t0.d[i]);
+//             ds_t0.y[i] = s_t0.v[i] * sin(s_t0.psi[i] + param.cg_ratio * u_t0.d[i]);
+//             ds_t0.v[i] = (-1/param.tau) * s_t0.v[i] + (param.k)  * u_t0.F[i];
+//             ds_t0.psi[i] = s_t0.v[i] * tan(u_t0.d[i]) * cos(param.cg_ratio * u_t0.d[i])/ param.length;
+//             ds_t0.s[i] = s_t0.v[i];
+
+//             // Integration to compute the new state:
+//             s_t0.x[i] += param.dt * ds_t0.x[i];
+//             s_t0.y[i] += param.dt * ds_t0.y[i];
+//             s_t0.v[i] += param.dt * ds_t0.v[i];
+//             s_t0.psi[i] += param.dt * ds_t0.psi[i];
+//             s_t0.s[i] += param.dt * ds_t0.s[i];
+
+//             if (s_t0.v[i] < 0.0){s_t0.v[i] = 0.0;}
+
+//             // Save the state in the trajectory
+//             X_[td + x] = s_t0.x[i];
+//             X_[td + y] = s_t0.y[i];
+//             X_[td + v] = s_t0.v[i];
+//             X_[td + psi] = s_t0.psi[i];
+//             X_[td + s] = s_t0.s[i];
+
+//             // t+= param.dt; 
+//         }
+//     } 
+
+//     for (int i = 0; i < M; i++){
+//         s_t0.l[i] = 0.0;
+//         for (int j = 0; j < param.N + 1; j++){
+//             tu = param.nU * (param.N + 1) * i + param.nU * j; //TODO: wird automatisch von ISPC zu array umgewandelt?
+//             td = param.nX * (param.N + 1) * i + param.nX * j;
+//             int idx = i * (param.N + 1) + j;
+//             s_ref = s_t0_s[idx];
+//             sr_t0.x[i] = traffic[i].centerlane.spline_x(s_ref);
+//             sr_t0.y[i] =traffic[i].centerlane.spline_y(s_ref);
+//             sr_t0.psi[i] = traffic[i].centerlane.compute_heading(s_ref);
+
+//             // Target speed:
+//             v_ref = traffic[i].v_target;
+
+//             // Input control:
+//             u_t0.F[i] = U_[tu + F];
+
+//             ds_t0.l[i] = param.weight_target_speed * (s_t0_v[idx] - v_ref) * (s_t0_v[idx] - v_ref)
+//                     + param.weight_center_lane * ((sr_t0.x[i] - s_t0_x[idx]) * (sr_t0.x[i] - s_t0_x[idx]) + (sr_t0.y[i] - s_t0_y[idx]) * (sr_t0.y[i] - s_t0_y[idx]))
+//                     + param.weight_heading * ((std::cos(sr_t0.psi[i]) - std::cos(s_t0_psi[idx]))*(std::cos(sr_t0.psi[i]) - std::cos(s_t0_psi[idx]))
+//                     +        (std::sin(sr_t0.psi[i]) - std::sin(s_t0_psi[idx]))*(std::sin(sr_t0.psi[i]) - std::sin(s_t0_psi[idx])))
+//                     + param.weight_input * u_t0.F[i] * u_t0.F[i];
+//             s_t0.l[i] += param.dt * ds_t0.l[i];
+//             X_[td + l] = s_t0.l[i];
+//         }
+//     }
+// }
+
+void DynamicGamePlanner::copyDataForISPC(const TrafficParticipants& traffic)
+{   
+    // const double* data = traffic[0].centerlane.spline_x.get_x().data();
+    // const size_t size = traffic[0].centerlane.spline_x.get_x().size();
+    // for(int i=0;i<size;i++)
+    // {
+    //     std::cout << data[i] << "; ";
+    // }
+    
+    lanes_ispc = (Lanes_ISPC*)malloc(M * sizeof(Lanes_ISPC));
+    state_ispc = (State_ISPC*)malloc(M * sizeof(State_ISPC));
+    for (int i = 0; i < M; i++) {
+        lanes_ispc[i].spline_x = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
+        lanes_ispc[i].spline_y = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
+    }
+    
+    for (int i = 0; i < M; i++){
+        lanes_ispc[i].spline_x->m_x = traffic[i].centerlane.spline_x.get_x().data();
+        lanes_ispc[i].spline_x->m_y = traffic[i].centerlane.spline_x.get_y().data();
+        lanes_ispc[i].spline_x->m_b = traffic[i].centerlane.spline_x.get_b().data();
+        lanes_ispc[i].spline_x->m_c = traffic[i].centerlane.spline_x.get_c().data();
+        lanes_ispc[i].spline_x->m_d = traffic[i].centerlane.spline_x.get_d().data();
+        lanes_ispc[i].spline_x->m_c0 = traffic[i].centerlane.spline_x.get_m_c0();
+        lanes_ispc[i].spline_x->_size = traffic[i].centerlane.spline_x.get_x().size();
+
+        lanes_ispc[i].spline_y->m_x = traffic[i].centerlane.spline_y.get_x().data();
+        lanes_ispc[i].spline_y->m_y = traffic[i].centerlane.spline_y.get_y().data();
+        lanes_ispc[i].spline_y->m_b = traffic[i].centerlane.spline_y.get_b().data();
+        lanes_ispc[i].spline_y->m_c = traffic[i].centerlane.spline_y.get_c().data();
+        lanes_ispc[i].spline_y->m_d = traffic[i].centerlane.spline_y.get_d().data();
+        lanes_ispc[i].spline_y->m_c0 = traffic[i].centerlane.spline_y.get_m_c0();
+        lanes_ispc[i].spline_y->_size = traffic[i].centerlane.spline_y.get_x().size();
+
+        state_ispc[i].x = traffic[i].x;
+        state_ispc[i].y = traffic[i].y;
+        state_ispc[i].v = traffic[i].v;
+        state_ispc[i].psi = traffic[i].psi;
+        state_ispc[i].v_target = traffic[i].v_target;
+    }
+    #ifdef USE_RECORDER
+        //write me code to record the data of m_x, m_y, m_b, m_c, m_d, m_c0 and the data of get_x, get_y, get_b, get_c, get_d, get_c0
+        for (int i = 0; i < M; i++) {
+            Recorder::getInstance()->saveData<double>("x", state_ispc[i].x);
+            Recorder::getInstance()->saveData<double>("y", state_ispc[i].y);
+            Recorder::getInstance()->saveData<double>("v", state_ispc[i].v);
+            Recorder::getInstance()->saveData<double>("psi", state_ispc[i].psi);
+            Recorder::getInstance()->saveData<double>("v_target", state_ispc[i].v_target);
+            Recorder::getInstance()->saveData<double>("x_original", traffic[i].x);
+            Recorder::getInstance()->saveData<double>("y_original", traffic[i].y);
+            Recorder::getInstance()->saveData<double>("v_original", traffic[i].v);
+            Recorder::getInstance()->saveData<double>("psi_original", traffic[i].psi);
+            Recorder::getInstance()->saveData<double>("v_target_original", traffic[i].v_target);
+        }
+    #endif
+
+}
+
+void DynamicGamePlanner::launch_integrate_ISPC(double* X_, const double* U_)
+{
+    integrate_ispc(X_, U_, lanes_ispc, state_ispc, M);
+    // integrate(X_, U_);
 }

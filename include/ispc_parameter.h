@@ -9,13 +9,13 @@ enum { x = 0, y = 1, v = 2, psi = 3, s = 4, l = 5 };
 enum { d = 0, F = 1 };
 
 // Integration parameters
-#define N 20+1                                  // number of integration nodes
+#define N 20                                  // number of integration nodes
 #define nX 6                                  // <X, Y, V, PSI, S, L>
 #define nU 2                                  // <d, F>
 
 // Numerical constants
-// const double tau = 2.0;
-// const double k = 10.0;
+const double tau = 2.0;
+const double k = 10.0;
 // const double r_safe = 2.5;
 // const double r_lane = 3.5;
 // const double eps = 1e-6;
