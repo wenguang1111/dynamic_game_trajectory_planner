@@ -3,10 +3,10 @@ project(dynamic_game_trajectory_planner VERSION 0.1.0 LANGUAGES C CXX ISPC)
 
 enable_language(ISPC)
 
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(ISPC_TARGET "avx2-i32x8")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # set(ispc_files
 #     src/integrate.ispc
 # )
@@ -15,23 +15,24 @@ set(ISPC_OUT_O "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.o")
 set(ISPC_OUT_H "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.h")
 set(ISPC_OUT_S "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.s")
 
-add_custom_command(
-    OUTPUT ${ISPC_OUT_O} ${ISPC_OUT_H}
-    COMMAND ispc ${ISPC_PATH} -o ${ISPC_OUT_O} -I${CMAKE_CURRENT_SOURCE_DIR}/include --target=${ISPC_TARGET} --header-outfile=${ISPC_OUT_H}
-    DEPENDS ${ISPC_PATH}
-    COMMENT "Compiling ISPC: ${ISPC_PATH}"
-)
 # add_custom_command(
 #     OUTPUT ${ISPC_OUT_O} ${ISPC_OUT_H} ${ISPC_OUT_S}
-#     COMMAND ispc ${ISPC_PATH}
-#             -o ${ISPC_OUT_O}
-#             -S -g
-#             --target=${ISPC_TARGET}
-#             --header-outfile=${ISPC_OUT_H}
-#             -o ${ISPC_OUT_S}
+#     COMMAND ispc ${ISPC_PATH} -o ${ISPC_OUT_O} -I${CMAKE_CURRENT_SOURCE_DIR}/include -O3 --target=${ISPC_TARGET} --header-outfile=${ISPC_OUT_H} 
 #     DEPENDS ${ISPC_PATH}
-#     COMMENT "Compiling ISPC (with assembly): ${ISPC_PATH}"
+#     COMMENT "Compiling ISPC: ${ISPC_PATH}"
 # )
+add_custom_command(
+    OUTPUT  ${ISPC_OUT_H} ${ISPC_OUT_S}
+    COMMAND ispc ${ISPC_PATH}
+            # -o ${ISPC_OUT_O}
+            --emit-asm -g
+            -I${CMAKE_CURRENT_SOURCE_DIR}/include
+            --target=${ISPC_TARGET}
+            --header-outfile=${ISPC_OUT_H}
+            -o ${ISPC_OUT_S}
+    DEPENDS ${ISPC_PATH}
+    COMMENT "Compiling ISPC (with assembly): ${ISPC_PATH}"
+)
 
 include_directories(include Recorder4Cpp ISPC_OUT_H)
 
@@ -76,9 +77,10 @@ target_include_directories(dynamic_game_trajectory_planner PRIVATE ${CMAKE_CURRE
 #     DEPENDS src/dynamic_game_planner.cpp
 #     COMMENT "Generating annotated assembly for dynamic_game_planner.cpp"
 # )
-# add_custom_target(generate_asm_dynamic_game_planner
-#     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dynamic_game_planner.s
-# )
+add_custom_target(generate_ispc_asm
+    DEPENDS ${ISPC_OUT_S}
+    COMMENT "Generating annotated assembly for ISPC file"
+)
 
 
 

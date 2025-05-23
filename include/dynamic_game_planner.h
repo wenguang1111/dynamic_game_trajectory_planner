@@ -10,6 +10,7 @@
 #include "utils.h"  // Utility functions
 #include "parameters.h"  // Parameters for the planner
 #include "integrate_ispc.h"
+#include "recorder.h"
 
 using namespace ispc;
 class DynamicGamePlanner {
@@ -37,8 +38,8 @@ public:
     Parameters param;
 
     TrafficParticipants traffic;
-    Lanes_ISPC* lanes_ispc;
-    State_ISPC* state_ispc;
+    Lanes_ISPC lanes_ispc;
+    State_ISPC state_ispc;
 
     DynamicGamePlanner();  // Constructor
     ~DynamicGamePlanner(); // Destructor
@@ -109,6 +110,90 @@ public:
         double* s_t0_v,
         double* X_,
         double* init_s_t0); 
+    void recordData(const double* X_, const double* U_)
+        {
+            #ifdef USE_RECORDER
+            for (int i = 0; i < M; i++) {
+                for (int j = 0; j < param.N + 1; j++) {
+                Recorder::getInstance()->saveData<double>("i", i);
+                Recorder::getInstance()->saveData<double>("j", j);    
+                Recorder::getInstance()->saveData<double>("X_x", X_[param.nX * (param.N + 1) * i + param.nX * j + x]);
+                Recorder::getInstance()->saveData<double>("X_y", X_[param.nX * (param.N + 1) * i + param.nX * j + y]);
+                Recorder::getInstance()->saveData<double>("X_v", X_[param.nX * (param.N + 1) * i + param.nX * j + v]);
+                Recorder::getInstance()->saveData<double>("X_psi", X_[param.nX * (param.N + 1) * i + param.nX * j + psi]);
+                Recorder::getInstance()->saveData<double>("X_s", X_[param.nX * (param.N + 1) * i + param.nX * j + s]);
+                Recorder::getInstance()->saveData<double>("X_l", X_[param.nX * (param.N + 1) * i + param.nX * j + l]);
+                Recorder::getInstance()->saveData<double>("U_F", U_[param.nU * (param.N + 1) * i + param.nU * j + F]);
+                Recorder::getInstance()->saveData<double>("U_d", U_[param.nU * (param.N + 1) * i + param.nU * j + d]);
+                }
+            }
+            #endif
+        }
 };
 
+// struct PhysicState_SIMD
+// {
+//     double* d = nullptr;
+//     double* F = nullptr;
+//     size_t size = 0;
+
+//     PhysicState_SIMD() = default;
+
+//     PhysicState_SIMD(const PhysicState_SIMD&) = delete;
+//     PhysicState_SIMD& operator=(const PhysicState_SIMD&) = delete;
+
+//     PhysicState_SIMD(PhysicState_SIMD&& other) noexcept
+//     {
+//         *this = std::move(other);
+//     }
+
+//     PhysicState_SIMD& operator=(PhysicState_SIMD&& other) noexcept
+//     {
+//         if (this != &other)
+//         {
+//             d = other.d; 
+//             F = other.F;
+//             size = other.size;
+
+//             other.d = other.F = nullptr;
+//             other.size = 0;
+//         }
+//         return *this;
+//     }
+
+//     ~PhysicState_SIMD()
+//     {
+//         freeMemory();
+//     }
+
+//     void allocate(size_t n)
+//     {
+//         freeMemory();
+//         size = n;
+
+//         d = allocateArray(n);
+//         F = allocateArray(n);
+//     }
+
+// private:
+//     static double* allocateArray(size_t n)
+//     {
+//         void* ptr = std::aligned_alloc(ALIGNMENT, n * sizeof(double));
+//         if (!ptr)
+//         {
+//             throw std::runtime_error("aligned_alloc failed!");
+//         }
+//         std::memset(ptr, 0, n * sizeof(double));
+//         return static_cast<double*>(ptr);
+//     }
+
+//     void freeMemory()
+//     {
+//         std::free(d);
+//         std::free(F);
+
+//         d = F = nullptr;
+//         size = 0;
+//     }
+// };
 #endif // DYNAMIC_GAME_PLANNER_H

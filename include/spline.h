@@ -138,7 +138,7 @@ public:
     std::vector<double> get_b() const { return m_b; }
     std::vector<double> get_c() const { return m_c; }
     std::vector<double> get_d() const { return m_d; }
-    const double* get_m_c0() const { return &m_c0; }
+    const double get_m_c0() const { return m_c0; }
     double get_x_min() const { assert(!m_x.empty()); return m_x.front(); }
     double get_x_max() const { assert(!m_x.empty()); return m_x.back(); }
 

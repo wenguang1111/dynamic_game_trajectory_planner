@@ -27,20 +27,15 @@ void DynamicGamePlanner::run(TrafficParticipants& traffic_state) {
     double constraints[nC];
 
     initial_guess(X, U);
-    // trust_region_solver(U);
-    // // // integrate(X, U);
-    // // // integrate_opt(X, U);
-    // // // integrate_SIMD(X,U);
-    // launch_integrate_ISPC(X, U);
-    // print_trajectories(X, U);
-    // compute_constraints(constraints, X, U);
-    // constraints_diagnostic(constraints, false);
-    // traffic = set_prediction(X, U);
-    Recorder::getInstance()->writeDataToCSV();
-    delete lanes_ispc->spline_x;
-    delete lanes_ispc->spline_y;
-    delete state_ispc;
-    delete lanes_ispc;
+    trust_region_solver(U);
+    // integrate(X, U);
+    // integrate_opt(X, U);
+    // integrate_SIMD(X,U);
+    launch_integrate_ISPC(X, U);
+    print_trajectories(X, U);
+    compute_constraints(constraints, X, U);
+    constraints_diagnostic(constraints, false);
+    traffic = set_prediction(X, U);
 }
 
 void DynamicGamePlanner::setup() {
@@ -100,22 +95,6 @@ void DynamicGamePlanner::initial_guess(double* X_, double* U_)
     // integrate_opt(X_,U_);
     // integrate_SIMD(X_,U_);
     launch_integrate_ISPC(X_, U_);
-    #ifdef USE_RECORDER
-        for (int i = 0; i < M; i++) {
-            for (int j = 0; j < param.N + 1; j++) {
-            Recorder::getInstance()->saveData<double>("i", i);
-            Recorder::getInstance()->saveData<double>("j", j);    
-            Recorder::getInstance()->saveData<double>("X_x", X_[param.nX * (param.N + 1) * i + param.nX * j + x]);
-            Recorder::getInstance()->saveData<double>("X_y", X_[param.nX * (param.N + 1) * i + param.nX * j + y]);
-            Recorder::getInstance()->saveData<double>("X_v", X_[param.nX * (param.N + 1) * i + param.nX * j + v]);
-            Recorder::getInstance()->saveData<double>("X_psi", X_[param.nX * (param.N + 1) * i + param.nX * j + psi]);
-            Recorder::getInstance()->saveData<double>("X_s", X_[param.nX * (param.N + 1) * i + param.nX * j + s]);
-            Recorder::getInstance()->saveData<double>("X_l", X_[param.nX * (param.N + 1) * i + param.nX * j + l]);
-            Recorder::getInstance()->saveData<double>("U_F", U_[param.nU * (param.N + 1) * i + param.nU * j + F]);
-            Recorder::getInstance()->saveData<double>("U_d", U_[param.nU * (param.N + 1) * i + param.nU * j + d]);
-            }
-        }
-	#endif
 }
 
 /** integrates the input U to get the state X */
@@ -1046,35 +1025,35 @@ void DynamicGamePlanner::copyDataForISPC(const TrafficParticipants& traffic)
     //     std::cout << data[i] << "; ";
     // }
     
-    lanes_ispc = (Lanes_ISPC*)malloc(M * sizeof(Lanes_ISPC));
-    state_ispc = (State_ISPC*)malloc(M * sizeof(State_ISPC));
-    for (int i = 0; i < M; i++) {
-        lanes_ispc[i].spline_x = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
-        lanes_ispc[i].spline_y = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
-    }
+    // lanes_ispc = (Lanes_ISPC*)malloc(M * sizeof(Lanes_ISPC));
+    // state_ispc = (State_ISPC*)malloc(M * sizeof(State_ISPC));
+    // for (int i = 0; i < M; i++) {
+    //     lanes_ispc[i].spline_x = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
+    //     lanes_ispc[i].spline_y = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
+    // }
     
     for (int i = 0; i < M; i++){
-        lanes_ispc[i].spline_x->m_x = traffic[i].centerlane.spline_x.get_x().data();
-        lanes_ispc[i].spline_x->m_y = traffic[i].centerlane.spline_x.get_y().data();
-        lanes_ispc[i].spline_x->m_b = traffic[i].centerlane.spline_x.get_b().data();
-        lanes_ispc[i].spline_x->m_c = traffic[i].centerlane.spline_x.get_c().data();
-        lanes_ispc[i].spline_x->m_d = traffic[i].centerlane.spline_x.get_d().data();
-        lanes_ispc[i].spline_x->m_c0 = traffic[i].centerlane.spline_x.get_m_c0();
-        lanes_ispc[i].spline_x->_size = traffic[i].centerlane.spline_x.get_x().size();
+        lanes_ispc.spline_x.m_x[i] = traffic[i].centerlane.spline_x.get_x().data();
+        lanes_ispc.spline_x.m_y[i] = traffic[i].centerlane.spline_x.get_y().data();
+        lanes_ispc.spline_x.m_b[i] = traffic[i].centerlane.spline_x.get_b().data();
+        lanes_ispc.spline_x.m_c[i] = traffic[i].centerlane.spline_x.get_c().data();
+        lanes_ispc.spline_x.m_d[i] = traffic[i].centerlane.spline_x.get_d().data();
+        lanes_ispc.spline_x.m_c0[i] = traffic[i].centerlane.spline_x.get_m_c0();
+        lanes_ispc.spline_x._size = traffic[i].centerlane.spline_x.get_x().size();
 
-        lanes_ispc[i].spline_y->m_x = traffic[i].centerlane.spline_y.get_x().data();
-        lanes_ispc[i].spline_y->m_y = traffic[i].centerlane.spline_y.get_y().data();
-        lanes_ispc[i].spline_y->m_b = traffic[i].centerlane.spline_y.get_b().data();
-        lanes_ispc[i].spline_y->m_c = traffic[i].centerlane.spline_y.get_c().data();
-        lanes_ispc[i].spline_y->m_d = traffic[i].centerlane.spline_y.get_d().data();
-        lanes_ispc[i].spline_y->m_c0 = traffic[i].centerlane.spline_y.get_m_c0();
-        lanes_ispc[i].spline_y->_size = traffic[i].centerlane.spline_y.get_x().size();
+        lanes_ispc.spline_y.m_x[i] = traffic[i].centerlane.spline_y.get_x().data();
+        lanes_ispc.spline_y.m_y[i] = traffic[i].centerlane.spline_y.get_y().data();
+        lanes_ispc.spline_y.m_b[i] = traffic[i].centerlane.spline_y.get_b().data();
+        lanes_ispc.spline_y.m_c[i] = traffic[i].centerlane.spline_y.get_c().data();
+        lanes_ispc.spline_y.m_d[i] = traffic[i].centerlane.spline_y.get_d().data();
+        lanes_ispc.spline_y.m_c0[i] = traffic[i].centerlane.spline_y.get_m_c0();
+        lanes_ispc.spline_y._size = traffic[i].centerlane.spline_y.get_x().size();
 
-        state_ispc[i].x = traffic[i].x;
-        state_ispc[i].y = traffic[i].y;
-        state_ispc[i].v = traffic[i].v;
-        state_ispc[i].psi = traffic[i].psi;
-        state_ispc[i].v_target = traffic[i].v_target;
+        state_ispc.x[i] = traffic[i].x;
+        state_ispc.y[i] = traffic[i].y;
+        state_ispc.v[i] = traffic[i].v;
+        state_ispc.psi[i] = traffic[i].psi;
+        state_ispc.v_target[i] = traffic[i].v_target;
     }
     #ifdef USE_RECORDER
         //write me code to record the data of m_x, m_y, m_b, m_c, m_d, m_c0 and the data of get_x, get_y, get_b, get_c, get_d, get_c0
@@ -1096,6 +1075,55 @@ void DynamicGamePlanner::copyDataForISPC(const TrafficParticipants& traffic)
 
 void DynamicGamePlanner::launch_integrate_ISPC(double* X_, const double* U_)
 {
-    integrate_ispc(X_, U_, lanes_ispc, state_ispc, M);
+    VehicleState_SOA_SIMD s_t0_data;
+    integrate_ispc(X_, U_, s_t0_data, state_ispc, M);
     // integrate(X_, U_);
+    int tu;
+    int td;
+    int ind;
+    double s_ref;
+    double v_ref;
+    double s_t0_l;
+    double sr_t0[param.nX];
+    double u_t0[param.nU];
+    double ds_t0[param.nX];
+    for (int i = 0; i < M; i++){
+        ind = 0;
+        td = nx * i;
+        // Initial state:
+        s_t0_l = 0.0;
+
+        for (int j = 0; j < param.N + 1; j++){
+            tu = param.nU * (param.N + 1) * i + param.nU * j;
+            td = param.nX * (param.N + 1) * i + param.nX * j;
+
+            // Reference point on the center lane:
+            int index = i * (param.N + 1) + j;
+            s_ref = s_t0_data.s[index];
+            sr_t0[x] = traffic[i].centerlane.spline_x(s_ref);
+            sr_t0[y] =traffic[i].centerlane.spline_y(s_ref);
+            sr_t0[psi] = traffic[i].centerlane.compute_heading(s_ref);
+
+            // Target speed:
+            v_ref = traffic[i].v_target;
+
+            // Input control:
+            u_t0[d] = U_[tu + d];
+            u_t0[F] = U_[tu + F];
+            
+            // Derivatives: 
+            ds_t0[l] = param.weight_target_speed * (s_t0_data.v[index] - v_ref) * (s_t0_data.v[index]- v_ref)
+                    + param.weight_center_lane * ((sr_t0[x] - s_t0_data.x[index]) * (sr_t0[x] - s_t0_data.x[index]) + (sr_t0[y] - s_t0_data.y[index]) * (sr_t0[y] - s_t0_data.y[index]))
+                    + param.weight_heading * ((std::cos(sr_t0[psi]) - std::cos(s_t0_data.psi[index]))*(std::cos(sr_t0[psi]) - std::cos(s_t0_data.psi[index]))
+                    +        (std::sin(sr_t0[psi]) - std::sin(s_t0_data.psi[index]))*(std::sin(sr_t0[psi]) - std::sin(s_t0_data.psi[index])))
+                    + param.weight_input * u_t0[F] * u_t0[F];
+
+            // Integration to compute the new state: 
+            s_t0_l += param.dt * ds_t0[l];
+
+            // Save the state in the trajectory
+            X_[td + l] = s_t0_l;  
+        }
+    }
+    recordData(X_, U_); 
 }

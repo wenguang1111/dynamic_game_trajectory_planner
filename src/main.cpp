@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono> 
 #include "dynamic_game_planner.h"
+#include "recorder.h"
 
 void save_lanes_to_csv(const std::vector<VehicleState>& traffic, const std::string& filename) {
     std::ofstream file(filename);
@@ -100,6 +101,10 @@ int main() {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     planner.run(traffic_intersection);
+    #ifdef USE_RECORDER
+        // write recorded data to csv file
+        Recorder::getInstance()->writeDataToCSV();
+    #endif
 
     auto end_time = std::chrono::high_resolution_clock::now();
 
