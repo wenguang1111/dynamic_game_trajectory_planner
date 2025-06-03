@@ -12,7 +12,8 @@ enum { d = 0, F = 1 };
 #define N 20                                  // number of integration nodes
 #define nX 6                                  // <X, Y, V, PSI, S, L>
 #define nU 2                                  // <d, F>
-#define MAX_OBSTACLES 20
+#define BLOCK_SIZE 4 
+#define NUM_State N+1
 
 // Numerical constants
 uniform const double tau = 2.0;
@@ -39,6 +40,5 @@ uniform const double weight_target_speed = 1e0;            // weight for max spe
 uniform const double weight_center_lane = 1e-1;            // weight for center lane
 uniform const double weight_heading = 1e2;                 // weight for heading
 uniform const double weight_input = 0.0;                   // weight for input
-
 
 #endif // ISPC_PARAMETERS_H

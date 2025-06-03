@@ -4,6 +4,8 @@
 enum STATES {x, y, v, psi, s, l};
 enum INPUTS {d, F};
 
+#define BLOCK_SIZE 4 
+#define NUM_State 21
 struct Parameters
 {
     const double tau = 2.0;

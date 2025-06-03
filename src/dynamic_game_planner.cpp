@@ -10,14 +10,13 @@ DynamicGamePlanner::DynamicGamePlanner()
 
 DynamicGamePlanner::~DynamicGamePlanner() {
     // Destructor implementation
+    delete[] state_ispc; 
     std::cout << "DynamicGamePlanner destroyed." << std::endl;
 }
 
 void DynamicGamePlanner::run(TrafficParticipants& traffic_state) {
     
     traffic = traffic_state;
-    //TODO: copy data to ISPC
-    // copyDataForISPC(traffic, lanes_ispc, state_ispc);
     // Variables initialization and setup:
     setup();
     copyDataForISPC(traffic);
@@ -36,12 +35,16 @@ void DynamicGamePlanner::run(TrafficParticipants& traffic_state) {
     compute_constraints(constraints, X, U);
     constraints_diagnostic(constraints, false);
     traffic = set_prediction(X, U);
+    recordData(X, U); 
 }
 
 void DynamicGamePlanner::setup() {
     
     // Setup number of traffic participants:
     M = traffic.size();
+
+    int num_block =  M%BLOCK_SIZE==0? M/BLOCK_SIZE :  (M/BLOCK_SIZE+1);
+    state_ispc = (State_Block*) malloc(sizeof(State_Block)*BLOCK_SIZE*num_block);
     
     // Setup number of inequality constraints for one vehicle:
     // 2 * nU * (N + 1) inequality constraints for inputs 
@@ -173,7 +176,7 @@ void DynamicGamePlanner::integrate(double* X_, const double* U_)
 
             t+= param.dt;    
         }
-    } 
+    }
 }
 
 /** SR1 Hessian matrix update*/
@@ -1018,112 +1021,201 @@ void DynamicGamePlanner::update_trajectory_local(int i,
 
 void DynamicGamePlanner::copyDataForISPC(const TrafficParticipants& traffic)
 {   
-    // const double* data = traffic[0].centerlane.spline_x.get_x().data();
-    // const size_t size = traffic[0].centerlane.spline_x.get_x().size();
-    // for(int i=0;i<size;i++)
-    // {
-    //     std::cout << data[i] << "; ";
-    // }
+    int num_block =  M%BLOCK_SIZE==0? M/BLOCK_SIZE :  (M/BLOCK_SIZE+1);
     
-    // lanes_ispc = (Lanes_ISPC*)malloc(M * sizeof(Lanes_ISPC));
-    // state_ispc = (State_ISPC*)malloc(M * sizeof(State_ISPC));
-    // for (int i = 0; i < M; i++) {
-    //     lanes_ispc[i].spline_x = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
-    //     lanes_ispc[i].spline_y = (Spline_ISPC*)malloc(sizeof(Spline_ISPC));
-    // }
-    
-    for (int i = 0; i < M; i++){
-        lanes_ispc.spline_x.m_x[i] = traffic[i].centerlane.spline_x.get_x().data();
-        lanes_ispc.spline_x.m_y[i] = traffic[i].centerlane.spline_x.get_y().data();
-        lanes_ispc.spline_x.m_b[i] = traffic[i].centerlane.spline_x.get_b().data();
-        lanes_ispc.spline_x.m_c[i] = traffic[i].centerlane.spline_x.get_c().data();
-        lanes_ispc.spline_x.m_d[i] = traffic[i].centerlane.spline_x.get_d().data();
-        lanes_ispc.spline_x.m_c0[i] = traffic[i].centerlane.spline_x.get_m_c0();
-        lanes_ispc.spline_x._size = traffic[i].centerlane.spline_x.get_x().size();
-
-        lanes_ispc.spline_y.m_x[i] = traffic[i].centerlane.spline_y.get_x().data();
-        lanes_ispc.spline_y.m_y[i] = traffic[i].centerlane.spline_y.get_y().data();
-        lanes_ispc.spline_y.m_b[i] = traffic[i].centerlane.spline_y.get_b().data();
-        lanes_ispc.spline_y.m_c[i] = traffic[i].centerlane.spline_y.get_c().data();
-        lanes_ispc.spline_y.m_d[i] = traffic[i].centerlane.spline_y.get_d().data();
-        lanes_ispc.spline_y.m_c0[i] = traffic[i].centerlane.spline_y.get_m_c0();
-        lanes_ispc.spline_y._size = traffic[i].centerlane.spline_y.get_x().size();
-
-        state_ispc.x[i] = traffic[i].x;
-        state_ispc.y[i] = traffic[i].y;
-        state_ispc.v[i] = traffic[i].v;
-        state_ispc.psi[i] = traffic[i].psi;
-        state_ispc.v_target[i] = traffic[i].v_target;
-    }
-    #ifdef USE_RECORDER
-        //write me code to record the data of m_x, m_y, m_b, m_c, m_d, m_c0 and the data of get_x, get_y, get_b, get_c, get_d, get_c0
-        for (int i = 0; i < M; i++) {
-            Recorder::getInstance()->saveData<double>("x", state_ispc[i].x);
-            Recorder::getInstance()->saveData<double>("y", state_ispc[i].y);
-            Recorder::getInstance()->saveData<double>("v", state_ispc[i].v);
-            Recorder::getInstance()->saveData<double>("psi", state_ispc[i].psi);
-            Recorder::getInstance()->saveData<double>("v_target", state_ispc[i].v_target);
-            Recorder::getInstance()->saveData<double>("x_original", traffic[i].x);
-            Recorder::getInstance()->saveData<double>("y_original", traffic[i].y);
-            Recorder::getInstance()->saveData<double>("v_original", traffic[i].v);
-            Recorder::getInstance()->saveData<double>("psi_original", traffic[i].psi);
-            Recorder::getInstance()->saveData<double>("v_target_original", traffic[i].v_target);
+    for (int i = 0; i < num_block; i++){
+        for(int j =0; j < BLOCK_SIZE; j++)
+        {
+            int index = i * BLOCK_SIZE + j;
+            if (index >= M) break; // Avoid out of bounds access
+            state_ispc[i].x[j] = traffic[index].x;
+            state_ispc[i].y[j] = traffic[index].y;
+            state_ispc[i].v[j] = traffic[index].v;
+            state_ispc[i].psi[j] = traffic[index].psi;
+            state_ispc[i].v_target[j] = traffic[index].v_target;
         }
-    #endif
+    }
+    // #ifdef USE_RECORDER
+    //     //write me code to record the data of m_x, m_y, m_b, m_c, m_d, m_c0 and the data of get_x, get_y, get_b, get_c, get_d, get_c0
+    //     for (int i = 0; i < num_block; i++) {
+    //         for(int j = 0; j < BLOCK_SIZE; j++) {
+    //             int index = i * BLOCK_SIZE + j;
+    //             if (index >= M) break;
+    //             Recorder::getInstance()->saveData<double>("x", state_ispc[i].x[j]);
+    //             Recorder::getInstance()->saveData<double>("y", state_ispc[i].y[j]);
+    //             Recorder::getInstance()->saveData<double>("v", state_ispc[i].v[j]);
+    //             Recorder::getInstance()->saveData<double>("psi", state_ispc[i].psi[j]);
+    //             Recorder::getInstance()->saveData<double>("v_target", state_ispc[i].v_target[j]);
+    //             Recorder::getInstance()->saveData<double>("x_original", traffic[index].x);
+    //             Recorder::getInstance()->saveData<double>("y_original", traffic[index].y);
+    //             Recorder::getInstance()->saveData<double>("v_original", traffic[index].v);
+    //             Recorder::getInstance()->saveData<double>("psi_original", traffic[index].psi);
+    //             Recorder::getInstance()->saveData<double>("v_target_original", traffic[index].v_target);
+    //             Recorder::getInstance()->saveData<double>("x_i",i);
+    //             Recorder::getInstance()->saveData<double>("x_j",j);
+    //         }
+    //     }
+    // #endif
 
+}
+
+void DynamicGamePlanner::convertAoSoA(double* X_, Block_X* output_X_, const double* U_, Block_U* output_U_, int num_block)
+{
+    for (int i = 0; i < num_block; i++)
+    {
+        for (int j = 0; j < NUM_State; j++)
+        {
+            int index = i * NUM_State + j;
+            for(int k=0; k<BLOCK_SIZE;k++)
+            {
+                if(i* BLOCK_SIZE + k >= M) break; // Avoid out of bounds access
+                int pos_U = Parameters::nU*NUM_State*(BLOCK_SIZE*i + k) + Parameters::nU*j;
+                int pos_X = Parameters::nX*NUM_State*(BLOCK_SIZE*i + k) + Parameters::nX*j;
+                output_X_[index].x[k] = X_[pos_X+x];
+                output_X_[index].y[k] = X_[pos_X+y];
+                output_X_[index].v[k] = X_[pos_X+v];
+                output_X_[index].psi[k] = X_[pos_X+psi];
+                output_X_[index].s[k] = X_[pos_X+s];
+                output_X_[index].l[k] = X_[pos_X+l];
+                output_U_[index].d[k] = U_[pos_U+d];
+                output_U_[index].F[k] = U_[pos_U+F];
+            }     
+        }
+    }
+}
+
+void DynamicGamePlanner::convertBackData_X(double* X_, Block_X* input_X_, int num_block)
+{
+    for (int i = 0; i < num_block; i++)
+    {
+        for (int j = 0; j < NUM_State; j++)
+        {
+            int index = i * NUM_State + j;
+            for(int k=0; k<BLOCK_SIZE;k++)
+            {
+                if(i* BLOCK_SIZE + k >= M) break;
+                int pos_X = Parameters::nX*NUM_State*(BLOCK_SIZE*i + k) + Parameters::nX*j;
+                X_[pos_X+x] = input_X_[index].x[k];
+                X_[pos_X+y] = input_X_[index].y[k];
+                X_[pos_X+v] = input_X_[index].v[k];
+                X_[pos_X+psi] = input_X_[index].psi[k];
+                X_[pos_X+s] = input_X_[index].s[k];
+                X_[pos_X+l] = input_X_[index].l[k];
+            }     
+        }
+    }
 }
 
 void DynamicGamePlanner::launch_integrate_ISPC(double* X_, const double* U_)
 {
-    VehicleState_SOA_SIMD s_t0_data;
-    integrate_ispc(X_, U_, s_t0_data, state_ispc, M);
     // integrate(X_, U_);
+    int num_block =  M%BLOCK_SIZE==0? M/BLOCK_SIZE :  (M/BLOCK_SIZE+1);
+    Block_U data_u[num_block][NUM_State];
+    Block_X data_x[num_block][NUM_State];
+    convertAoSoA(X_, &data_x[0][0], U_, &data_u[0][0], num_block);
+    
+    Block_X s_t0_data[num_block][NUM_State];
+    // integrate_ispc(&data_x[0][0], &data_u[0][0], &s_t0_data[0][0], state_ispc, num_block);
+    
     int tu;
     int td;
     int ind;
     double s_ref;
     double v_ref;
-    double s_t0_l;
+    
     double sr_t0[param.nX];
-    double u_t0[param.nU];
+    
     double ds_t0[param.nX];
-    for (int i = 0; i < M; i++){
-        ind = 0;
-        td = nx * i;
-        // Initial state:
-        s_t0_l = 0.0;
 
-        for (int j = 0; j < param.N + 1; j++){
-            tu = param.nU * (param.N + 1) * i + param.nU * j;
-            td = param.nX * (param.N + 1) * i + param.nX * j;
+    Block_X s_t0;
+    double u_t0[param.nX];
 
-            // Reference point on the center lane:
-            int index = i * (param.N + 1) + j;
-            s_ref = s_t0_data.s[index];
-            sr_t0[x] = traffic[i].centerlane.spline_x(s_ref);
-            sr_t0[y] =traffic[i].centerlane.spline_y(s_ref);
-            sr_t0[psi] = traffic[i].centerlane.compute_heading(s_ref);
-
-            // Target speed:
-            v_ref = traffic[i].v_target;
-
-            // Input control:
-            u_t0[d] = U_[tu + d];
-            u_t0[F] = U_[tu + F];
+    for(int i = 0; i<num_block; i++){
+        for(int k=0; k<BLOCK_SIZE; k++)
+        {
+            s_t0.x[k] = state_ispc[i].x[k];
+            s_t0.y[k] = state_ispc[i].y[k];
+            s_t0.v[k]= state_ispc[i].v[k];
+            s_t0.psi[k] = state_ispc[i].psi[k];
+            s_t0.s[k] = 0.0;
+        }
+        for (int j = 0; j < NUM_State; j++){
             
-            // Derivatives: 
-            ds_t0[l] = param.weight_target_speed * (s_t0_data.v[index] - v_ref) * (s_t0_data.v[index]- v_ref)
-                    + param.weight_center_lane * ((sr_t0[x] - s_t0_data.x[index]) * (sr_t0[x] - s_t0_data.x[index]) + (sr_t0[y] - s_t0_data.y[index]) * (sr_t0[y] - s_t0_data.y[index]))
-                    + param.weight_heading * ((std::cos(sr_t0[psi]) - std::cos(s_t0_data.psi[index]))*(std::cos(sr_t0[psi]) - std::cos(s_t0_data.psi[index]))
-                    +        (std::sin(sr_t0[psi]) - std::sin(s_t0_data.psi[index]))*(std::sin(sr_t0[psi]) - std::sin(s_t0_data.psi[index])))
-                    + param.weight_input * u_t0[F] * u_t0[F];
+            int index = i * NUM_State + j;
+            for ( int q = 0; q < BLOCK_SIZE; q++)
+            {
+                int index_obstacles = i * BLOCK_SIZE + q;
+                if(index_obstacles >= M) break;
 
-            // Integration to compute the new state: 
-            s_t0_l += param.dt * ds_t0[l];
+                s_t0_data[i][j].x[q] = s_t0.x[q];
+                s_t0_data[i][j].y[q] = s_t0.y[q];
+                s_t0_data[i][j].v[q] = s_t0.v[q];
+                s_t0_data[i][j].psi[q] = s_t0.psi[q];
+                s_t0_data[i][j].s[q] = s_t0.s[q];
+                
+                u_t0[d] = data_u[i][j].d[q];
+                u_t0[F] = data_u[i][j].F[q];
+                
+                // Derivatives: 
+                ds_t0[x] = s_t0.v[q] * cos(s_t0.psi[q] + param.cg_ratio * u_t0[d]);
+                ds_t0[y] = s_t0.v[q] * sin(s_t0.psi[q] + param.cg_ratio * u_t0[d]);
+                ds_t0[v] = (-1/param.tau) * s_t0.v[q] + (param.k) * u_t0[F];
+                ds_t0[psi] = s_t0.v[q] * tan(u_t0[d]) * cos(param.cg_ratio * u_t0[d])/ param.length;
+                ds_t0[s] = s_t0.v[q];
 
-            // Save the state in the trajectory
-            X_[td + l] = s_t0_l;  
+                s_t0.x[q] += param.dt * ds_t0[x];
+                s_t0.y[q] += param.dt * ds_t0[y];
+                s_t0.v[q] += param.dt * ds_t0[v];
+                s_t0.psi[q] += param.dt * ds_t0[psi];
+                s_t0.s[q] += param.dt * ds_t0[s];
+
+                if (s_t0.v[q] < 0.0){s_t0.v[q] = 0.0;}
+
+                data_x[i][j].x[q] = s_t0.x[q];
+                data_x[i][j].y[q] = s_t0.y[q];
+                data_x[i][j].v[q] = s_t0.v[q];
+                data_x[i][j].psi[q] = s_t0.psi[q];
+                data_x[i][j].s[q] = s_t0.s[q];
+            }
         }
     }
-    recordData(X_, U_); 
+
+
+    for(int i = 0; i<num_block; i++){
+        double s_t0_l[BLOCK_SIZE]={0};
+        for (int j = 0; j < NUM_State; j++){
+            for ( int q = 0; q < BLOCK_SIZE; q++)
+            {
+                int index_obstacles = i * BLOCK_SIZE + q;
+                if(index_obstacles >= M) break; // Avoid out of bounds access
+                s_ref = s_t0_data[i][j].s[q];
+                sr_t0[x] = traffic[index_obstacles].centerlane.spline_x(s_ref);
+                sr_t0[y] =traffic[index_obstacles].centerlane.spline_y(s_ref);
+                sr_t0[psi] = traffic[index_obstacles].centerlane.compute_heading(s_ref);
+
+                // Target speed:
+                v_ref = traffic[index_obstacles].v_target;
+
+                // Input control:
+                u_t0[d] = data_u[i][j].d[q];
+                u_t0[F] = data_u[i][j].F[q];
+                
+                // Derivatives: 
+                ds_t0[l] = param.weight_target_speed * (s_t0_data[i][j].v[q] - v_ref) * (s_t0_data[i][j].v[q]- v_ref)
+                        + param.weight_center_lane * ((sr_t0[x] - s_t0_data[i][j].x[q]) * (sr_t0[x] - s_t0_data[i][j].x[q]) + (sr_t0[y] - s_t0_data[i][j].y[q]) * (sr_t0[y] - s_t0_data[i][j].y[q]))
+                        + param.weight_heading * ((std::cos(sr_t0[psi]) - std::cos(s_t0_data[i][j].psi[q]))*(std::cos(sr_t0[psi]) - std::cos(s_t0_data[i][j].psi[q]))
+                        +        (std::sin(sr_t0[psi]) - std::sin(s_t0_data[i][j].psi[q]))*(std::sin(sr_t0[psi]) - std::sin(s_t0_data[i][j].psi[q])))
+                        + param.weight_input * u_t0[F] * u_t0[F];
+
+                // Integration to compute the new state: 
+                s_t0_l[q] += param.dt * ds_t0[l];
+
+                // Save the state in the trajectory
+                data_x[i][j].l[q] = s_t0_l[q];
+            }
+        }
+    }
+     
+    convertBackData_X(X_, &data_x[0][0], num_block);
 }
+

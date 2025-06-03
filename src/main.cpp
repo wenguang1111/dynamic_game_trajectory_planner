@@ -101,10 +101,6 @@ int main() {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     planner.run(traffic_intersection);
-    #ifdef USE_RECORDER
-        // write recorded data to csv file
-        Recorder::getInstance()->writeDataToCSV();
-    #endif
 
     auto end_time = std::chrono::high_resolution_clock::now();
 
@@ -118,6 +114,10 @@ int main() {
     // Save trajectories to a CSV file
     save_trajectories_to_csv(traffic_intersection, "../trajectories_intersection.csv");
     save_lanes_to_csv(traffic_intersection, "../lanes_intersection.csv");
+    #ifdef USE_RECORDER
+        // write recorded data to csv file
+        Recorder::getInstance()->writeDataToCSV();
+    #endif
 
     //-------------------------------------------- MERGING SCENARIO --------------------------------------------------
     std::cerr<<"------------------------ Merging Scenario -----------------------------"<<"\n";
@@ -244,7 +244,6 @@ int main() {
     // Save trajectories to a CSV file
     save_trajectories_to_csv(traffic_overtaking, "../trajectories_overtaking.csv");
     save_lanes_to_csv(traffic_overtaking, "../lanes_overtaking.csv");
-
     return 0;
 }
 

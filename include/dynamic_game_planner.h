@@ -38,11 +38,11 @@ public:
     Parameters param;
 
     TrafficParticipants traffic;
-    Lanes_ISPC lanes_ispc;
-    State_ISPC state_ispc;
+    State_Block* state_ispc=nullptr;
 
     DynamicGamePlanner();  // Constructor
-    ~DynamicGamePlanner(); // Destructor
+    
+    ~DynamicGamePlanner();
 
     void run( TrafficParticipants& traffic_state );                                  /** Main method to execute the planner */
     void setup();                                                                  /** Setup function */
@@ -129,71 +129,7 @@ public:
             }
             #endif
         }
+    void convertAoSoA(double* X_, Block_X* output_X_, const double* U_, Block_U* output_U_, int num_block);
+    void convertBackData_X(double* X_, Block_X* input_X_, int num_block);
 };
-
-// struct PhysicState_SIMD
-// {
-//     double* d = nullptr;
-//     double* F = nullptr;
-//     size_t size = 0;
-
-//     PhysicState_SIMD() = default;
-
-//     PhysicState_SIMD(const PhysicState_SIMD&) = delete;
-//     PhysicState_SIMD& operator=(const PhysicState_SIMD&) = delete;
-
-//     PhysicState_SIMD(PhysicState_SIMD&& other) noexcept
-//     {
-//         *this = std::move(other);
-//     }
-
-//     PhysicState_SIMD& operator=(PhysicState_SIMD&& other) noexcept
-//     {
-//         if (this != &other)
-//         {
-//             d = other.d; 
-//             F = other.F;
-//             size = other.size;
-
-//             other.d = other.F = nullptr;
-//             other.size = 0;
-//         }
-//         return *this;
-//     }
-
-//     ~PhysicState_SIMD()
-//     {
-//         freeMemory();
-//     }
-
-//     void allocate(size_t n)
-//     {
-//         freeMemory();
-//         size = n;
-
-//         d = allocateArray(n);
-//         F = allocateArray(n);
-//     }
-
-// private:
-//     static double* allocateArray(size_t n)
-//     {
-//         void* ptr = std::aligned_alloc(ALIGNMENT, n * sizeof(double));
-//         if (!ptr)
-//         {
-//             throw std::runtime_error("aligned_alloc failed!");
-//         }
-//         std::memset(ptr, 0, n * sizeof(double));
-//         return static_cast<double*>(ptr);
-//     }
-
-//     void freeMemory()
-//     {
-//         std::free(d);
-//         std::free(F);
-
-//         d = F = nullptr;
-//         size = 0;
-//     }
-// };
 #endif // DYNAMIC_GAME_PLANNER_H
