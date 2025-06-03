@@ -13,7 +13,7 @@ enum { d = 0, F = 1 };
 #define nX 6                                  // <X, Y, V, PSI, S, L>
 #define nU 2                                  // <d, F>
 #define BLOCK_SIZE 4 
-#define NUM_State N+1
+#define NUM_State 21
 
 // Numerical constants
 uniform const double tau = 2.0;

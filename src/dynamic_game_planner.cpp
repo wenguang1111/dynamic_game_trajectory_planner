@@ -1115,71 +1115,13 @@ void DynamicGamePlanner::launch_integrate_ISPC(double* X_, const double* U_)
     convertAoSoA(X_, &data_x[0][0], U_, &data_u[0][0], num_block);
     
     Block_X s_t0_data[num_block][NUM_State];
-    // integrate_ispc(&data_x[0][0], &data_u[0][0], &s_t0_data[0][0], state_ispc, num_block);
+    integrate_ispc(&data_x[0][0], &data_u[0][0], &s_t0_data[0][0], state_ispc, num_block);
     
-    int tu;
-    int td;
-    int ind;
     double s_ref;
     double v_ref;
-    
     double sr_t0[param.nX];
-    
     double ds_t0[param.nX];
-
-    Block_X s_t0;
     double u_t0[param.nX];
-
-    for(int i = 0; i<num_block; i++){
-        for(int k=0; k<BLOCK_SIZE; k++)
-        {
-            s_t0.x[k] = state_ispc[i].x[k];
-            s_t0.y[k] = state_ispc[i].y[k];
-            s_t0.v[k]= state_ispc[i].v[k];
-            s_t0.psi[k] = state_ispc[i].psi[k];
-            s_t0.s[k] = 0.0;
-        }
-        for (int j = 0; j < NUM_State; j++){
-            
-            int index = i * NUM_State + j;
-            for ( int q = 0; q < BLOCK_SIZE; q++)
-            {
-                int index_obstacles = i * BLOCK_SIZE + q;
-                if(index_obstacles >= M) break;
-
-                s_t0_data[i][j].x[q] = s_t0.x[q];
-                s_t0_data[i][j].y[q] = s_t0.y[q];
-                s_t0_data[i][j].v[q] = s_t0.v[q];
-                s_t0_data[i][j].psi[q] = s_t0.psi[q];
-                s_t0_data[i][j].s[q] = s_t0.s[q];
-                
-                u_t0[d] = data_u[i][j].d[q];
-                u_t0[F] = data_u[i][j].F[q];
-                
-                // Derivatives: 
-                ds_t0[x] = s_t0.v[q] * cos(s_t0.psi[q] + param.cg_ratio * u_t0[d]);
-                ds_t0[y] = s_t0.v[q] * sin(s_t0.psi[q] + param.cg_ratio * u_t0[d]);
-                ds_t0[v] = (-1/param.tau) * s_t0.v[q] + (param.k) * u_t0[F];
-                ds_t0[psi] = s_t0.v[q] * tan(u_t0[d]) * cos(param.cg_ratio * u_t0[d])/ param.length;
-                ds_t0[s] = s_t0.v[q];
-
-                s_t0.x[q] += param.dt * ds_t0[x];
-                s_t0.y[q] += param.dt * ds_t0[y];
-                s_t0.v[q] += param.dt * ds_t0[v];
-                s_t0.psi[q] += param.dt * ds_t0[psi];
-                s_t0.s[q] += param.dt * ds_t0[s];
-
-                if (s_t0.v[q] < 0.0){s_t0.v[q] = 0.0;}
-
-                data_x[i][j].x[q] = s_t0.x[q];
-                data_x[i][j].y[q] = s_t0.y[q];
-                data_x[i][j].v[q] = s_t0.v[q];
-                data_x[i][j].psi[q] = s_t0.psi[q];
-                data_x[i][j].s[q] = s_t0.s[q];
-            }
-        }
-    }
-
 
     for(int i = 0; i<num_block; i++){
         double s_t0_l[BLOCK_SIZE]={0};
