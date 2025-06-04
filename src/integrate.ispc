@@ -2,27 +2,27 @@
 // #include <stdio.h>
 
 struct State_Block{
-    double x[BLOCK_SIZE];
-    double y[BLOCK_SIZE];
-    double v[BLOCK_SIZE];
-    double psi[BLOCK_SIZE];
-    double v_target[BLOCK_SIZE];
+    float x[BLOCK_SIZE];
+    float y[BLOCK_SIZE];
+    float v[BLOCK_SIZE];
+    float psi[BLOCK_SIZE];
+    float v_target[BLOCK_SIZE];
 };
 
 struct Block_U
 {
-    double d[BLOCK_SIZE];
-    double F[BLOCK_SIZE];
+    float d[BLOCK_SIZE];
+    float F[BLOCK_SIZE];
 };
 
 struct Block_X
 {
-    double x[BLOCK_SIZE];
-    double y[BLOCK_SIZE];
-    double psi[BLOCK_SIZE];
-    double v[BLOCK_SIZE];
-    double s[BLOCK_SIZE];
-    double l[BLOCK_SIZE];
+    float x[BLOCK_SIZE];
+    float y[BLOCK_SIZE];
+    float psi[BLOCK_SIZE];
+    float v[BLOCK_SIZE];
+    float s[BLOCK_SIZE];
+    float l[BLOCK_SIZE];
 };
 
 
@@ -35,9 +35,9 @@ export void __keep_Lanes_ISPC_alive(uniform Block_U& sa, uniform Block_X& das) {
 export void integrate_ispc(uniform Block_X X_[], uniform const Block_U U_[], uniform Block_X s_t0_out[], uniform const State_Block states[],
                             uniform const int num_block)
 {
-    Block_X s_t0;
-    double ds_t0[nX];
-    double u_t0[nX];
+    uniform Block_X s_t0;
+    uniform Block_X ds_t0;
+    uniform Block_U u_t0;
 
     for(uniform int i = 0; i<num_block; i++){
         foreach(q=0 ... BLOCK_SIZE)
@@ -58,23 +58,26 @@ export void integrate_ispc(uniform Block_X X_[], uniform const Block_U U_[], uni
                 s_t0_out[index].psi[q] = s_t0.psi[q];
                 s_t0_out[index].s[q] = s_t0.s[q];
                 
-                u_t0[d] = U_[index].d[q];
-                u_t0[F] = U_[index].F[q];
+                u_t0.d[q] = U_[index].d[q];
+                u_t0.F[q] = U_[index].F[q];
                 
-                // Derivatives: 
-                ds_t0[x] = s_t0.v[q] * cos(s_t0.psi[q] + cg_ratio * u_t0[d]);
-                ds_t0[y] = s_t0.v[q] * sin(s_t0.psi[q] + cg_ratio * u_t0[d]);
-                ds_t0[v] = (-1/tau) * s_t0.v[q] + (k) * u_t0[F];
-                ds_t0[psi] = s_t0.v[q] * tan(u_t0[d]) * cos(cg_ratio * u_t0[d])/ length;
-                ds_t0[s] = s_t0.v[q];
+                // Derivatives:
+                float a = cg_ratio * u_t0.d[q];
+                float b = s_t0.psi[q] + a; 
+                ds_t0.x[q] = s_t0.v[q] * cos(b);
+                ds_t0.y[q] = s_t0.v[q] * sin(b);
+                ds_t0.v[q] = (-1/tau) * s_t0.v[q] + (k) * u_t0.F[q];
+                ds_t0.psi[q] = s_t0.v[q] * tan(u_t0.d[q]) * cos(a)/ length;
+                ds_t0.s[q] = s_t0.v[q];
 
-                s_t0.x[q] += dt * ds_t0[x];
-                s_t0.y[q] += dt * ds_t0[y];
-                s_t0.v[q] += dt * ds_t0[v];
-                s_t0.psi[q] += dt * ds_t0[psi];
-                s_t0.s[q] += dt * ds_t0[s];
+                s_t0.x[q] += dt * ds_t0.x[q];
+                s_t0.y[q] += dt * ds_t0.y[q];
+                s_t0.v[q] += dt * ds_t0.v[q];
+                s_t0.psi[q] += dt * ds_t0.psi[q];
+                s_t0.s[q] += dt * ds_t0.s[q];
 
-                if (s_t0.v[q] < 0.0){s_t0.v[q] = 0.0;}
+                // if (s_t0.v[q] < 0.0){s_t0.v[q] = 0.0;}
+                s_t0.v[q] = max(0.0f, s_t0.v[q]);
 
                 X_[index].x[q] = s_t0.x[q];
                 X_[index].y[q] = s_t0.y[q];

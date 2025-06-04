@@ -17,7 +17,11 @@ set(ISPC_OUT_S "${CMAKE_CURRENT_BINARY_DIR}/integrate_ispc.s")
 
 # add_custom_command(
 #     OUTPUT ${ISPC_OUT_O} ${ISPC_OUT_H} ${ISPC_OUT_S}
-#     COMMAND ispc ${ISPC_PATH} -o ${ISPC_OUT_O} -I${CMAKE_CURRENT_SOURCE_DIR}/include -O3 --target=${ISPC_TARGET} --header-outfile=${ISPC_OUT_H} 
+#     COMMAND ispc ${ISPC_PATH} --target=${ISPC_TARGET} -o ${ISPC_OUT_O} -I${CMAKE_CURRENT_SOURCE_DIR}/include -O3
+#     --opt=fast-math
+#     # --math-lib=fast
+#     -O3
+#     --header-outfile=${ISPC_OUT_H} 
 #     DEPENDS ${ISPC_PATH}
 #     COMMENT "Compiling ISPC: ${ISPC_PATH}"
 # )
@@ -27,6 +31,7 @@ add_custom_command(
             # -o ${ISPC_OUT_O}
             --emit-asm -g
             -I${CMAKE_CURRENT_SOURCE_DIR}/include
+            --opt=fast-math
             --target=${ISPC_TARGET}
             --header-outfile=${ISPC_OUT_H}
             -o ${ISPC_OUT_S}
